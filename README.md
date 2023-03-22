@@ -1,4 +1,4 @@
-# Java 20 demon
+# Java 20 demo
 
 ## compile and run
 

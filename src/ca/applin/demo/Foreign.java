@@ -3,6 +3,7 @@ package ca.applin.demo;
 import java.lang.foreign.*;
 import java.lang.invoke.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 import static java.lang.foreign.ValueLayout.ADDRESS;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
@@ -18,7 +19,25 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
  * </ul>
  */
 public class Foreign {
+    static final long KIB = 1024;
     public static void main(String[] args) throws Exception {
+
+        // global: never deallocated, always available to every Thread
+        // auto:  ready to be freed when the SegmentSegment becomes unreachable
+        MemorySegment mem = MemorySegment.allocateNative(8*KIB, SegmentScope.global());
+        try (ExecutorService s = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<?> f = s.submit(() -> {
+                System.out.println("Total size: " + mem.byteSize());
+                mem.fill((byte)0xFF);
+                mem.set(ValueLayout.JAVA_BYTE, 8091L, (byte) 0x00);
+                for (int i = 0; i < 10; i++) {
+                    System.out.println("!!!!! FROM ANOTHER: " + mem.getAtIndex(ValueLayout.JAVA_CHAR, (10L + 1L)));
+                }
+                System.out.println("UTF-8: " + mem.getUtf8String(2));
+            });
+            f.get();
+        }
+
         /*
         typedef struct vec3 {
             long double x
@@ -31,11 +50,10 @@ public class Foreign {
                 ValueLayout.JAVA_DOUBLE.withName("y"),
                 ValueLayout.JAVA_DOUBLE.withName("z")
         ).withName("vec3");
-
-        try (Arena offHead = Arena.openConfined()){
+        try (Arena offHeap = Arena.openConfined()) {
 
             // vec3* vectors = malloc(64*sizeof(vec3));
-            MemorySegment segment = offHead.allocateArray(vec3Layout, 64);
+            MemorySegment segment = offHeap.allocateArray(vec3Layout, 64);
 
             System.out.println(segment);
             for (int i = 0; i < 64; i++) {
